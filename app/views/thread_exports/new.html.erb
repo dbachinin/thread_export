@@ -1,0 +1,33 @@
+<main class="shell">
+  <section class="panel">
+    <h1>Threads unroll</h1>
+
+    <%= form_with model: @thread_export, class: "export-form" do |form| %>
+      <% if @thread_export.errors.any? %>
+        <div class="alert">
+          <%= @thread_export.errors.full_messages.to_sentence %>
+        </div>
+      <% end %>
+
+      <%= form.url_field :source_url,
+        required: true,
+        placeholder: "https://www.threads.com/@vitalifrance/post/DaLdoU7DEm1",
+        autocomplete: "off" %>
+      <%= form.submit "Unroll" %>
+    <% end %>
+  </section>
+
+  <% if @recent_exports.any? %>
+    <section class="panel">
+      <h2>Recent exports</h2>
+      <div class="export-list">
+        <% @recent_exports.each do |thread_export| %>
+          <%= link_to thread_export_path(thread_export), class: "export-row" do %>
+            <span><%= thread_export.source_url %></span>
+            <strong><%= thread_export.status %></strong>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+</main>

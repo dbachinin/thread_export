@@ -1,0 +1,7 @@
+/tmp
+/public
+/log
+/.dockerignore
+/Dockerfile
+/compose.yaml
+/bin/docker-entrypoint

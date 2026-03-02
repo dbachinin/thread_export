@@ -1,0 +1,43 @@
+<%= tag.div id: dom_id(thread_export, :status) do %>
+  <div class="status-line">
+    <span>Status</span>
+    <strong><%= local_assigns.fetch(:transient_status, thread_export.status) %></strong>
+  </div>
+
+  <p>
+    <% if thread_export.finished? && thread_export.published? %>
+      Extracted <%= pluralize(thread_export.posts_count, "post") %>.
+    <% elsif thread_export.finished? %>
+      Download expired. Generated files were removed.
+    <% elsif thread_export.failed? %>
+      <%= thread_export.error_message %>
+    <% else %>
+      Waiting for Sidekiq worker.
+    <% end %>
+  </p>
+
+  <% if thread_export.download_url.present? %>
+    <% public_url = "#{request.base_url}#{thread_export.download_url}" %>
+    <div class="export-link-row">
+      <%= link_to thread_export.download_url, thread_export.download_url, class: "export-page-link", target: "_blank", rel: "noopener" %>
+      <button
+        class="copy-link-button"
+        type="button"
+        data-copy-text="<%= public_url %>"
+        onclick="navigator.clipboard.writeText(this.dataset.copyText)"
+        title="Copy page link"
+        aria-label="Copy page link">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+    </div>
+
+    <iframe
+      class="export-preview"
+      src="<%= thread_export.download_url %>"
+      title="Generated Threads unroll"
+      loading="lazy"></iframe>
+  <% end %>
+<% end %>

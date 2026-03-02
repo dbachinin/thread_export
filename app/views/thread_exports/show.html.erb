@@ -1,0 +1,14 @@
+<%= turbo_stream_from @thread_export %>
+
+<main class="shell">
+  <section class="panel status-panel">
+    <h1>Export #<%= @thread_export.id %></h1>
+    <p class="source"><%= link_to @thread_export.source_url, @thread_export.source_url, target: "_blank", rel: "noopener" %></p>
+
+    <%= render "status", thread_export: @thread_export %>
+  </section>
+
+  <nav class="page-footer-nav" aria-label="Page navigation">
+    <%= link_to "Home", root_path %>
+  </nav>
+</main>
