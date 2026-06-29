@@ -2,23 +2,22 @@ require "rails_helper"
 
 RSpec.describe Threads::Fetcher do
   class FakeMechanizeAgent
-    attr_reader :requested_url
-
-    def get(url)
-      @requested_url = url
-      "page"
-    end
+    attr_accessor :user_agent, :request_headers, :redirect_ok, :open_timeout, :read_timeout
   end
 
-  describe "#fetch" do
-    it "loads the requested page with Mechanize" do
+  describe "#initialize" do
+    it "configures Mechanize to look like Google Chrome" do
       agent = FakeMechanizeAgent.new
-      fetcher = described_class.new(agent:)
 
-      page = fetcher.fetch("https://www.threads.com/@alice/post/root")
+      described_class.new(agent:)
 
-      expect(page).to eq("page")
-      expect(agent.requested_url).to eq("https://www.threads.com/@alice/post/root")
+      expect(agent.user_agent).to include("Google Chrome").or include("Chrome/")
+      expect(agent.user_agent).to include("Windows NT 10.0")
+      expect(agent.request_headers["Sec-Ch-Ua"]).to include("Google Chrome")
+      expect(agent.request_headers["Sec-Ch-Ua-Platform"]).to eq('"Windows"')
+      expect(agent.request_headers["Accept-Language"]).to include("ru-RU")
+      expect(agent.request_headers["Upgrade-Insecure-Requests"]).to eq("1")
+      expect(agent.redirect_ok).to be(true)
     end
   end
 end
