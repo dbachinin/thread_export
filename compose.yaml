@@ -3,6 +3,7 @@ services:
     build:
       context: .
       target: development
+      network: host
     command: bash -lc "bundle install && ./bin/rails db:prepare && ./bin/rails server -b 0.0.0.0"
     environment:
       RAILS_ENV: development
@@ -28,6 +29,7 @@ services:
     build:
       context: .
       target: development
+      network: host
     command: bash -lc "bundle install && ./bin/rails db:prepare && bundle exec sidekiq -C config/sidekiq.yml"
     environment:
       RAILS_ENV: development
