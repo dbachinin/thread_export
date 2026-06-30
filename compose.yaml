@@ -1,0 +1,75 @@
+services:
+  web:
+    build:
+      context: .
+      target: development
+    command: bash -lc "bundle install && ./bin/rails db:prepare && ./bin/rails server -b 0.0.0.0"
+    environment:
+      RAILS_ENV: development
+      REDIS_URL: redis://redis:6379/0
+      RAILS_MAX_THREADS: 5
+      POSTGRES_HOST: db
+      POSTGRES_USER: thread_export
+      POSTGRES_PASSWORD: thread_export
+      POSTGRES_DB: thread_export_development
+      POSTGRES_TEST_DB: thread_export_test
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/rails
+      - bundle:/usr/local/bundle
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  sidekiq:
+    build:
+      context: .
+      target: development
+    command: bash -lc "bundle install && ./bin/rails db:prepare && bundle exec sidekiq -C config/sidekiq.yml"
+    environment:
+      RAILS_ENV: development
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_HOST: db
+      POSTGRES_USER: thread_export
+      POSTGRES_PASSWORD: thread_export
+      POSTGRES_DB: thread_export_development
+      POSTGRES_TEST_DB: thread_export_test
+    volumes:
+      - .:/rails
+      - bundle:/usr/local/bundle
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis:/data
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: thread_export
+      POSTGRES_PASSWORD: thread_export
+      POSTGRES_DB: thread_export_development
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thread_export -d thread_export_development"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bundle:
+  redis:
+  postgres:

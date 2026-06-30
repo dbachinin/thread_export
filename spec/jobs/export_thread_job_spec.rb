@@ -9,7 +9,8 @@ RSpec.describe ExportThreadJob, type: :job do
       author: "alice",
       published_at: "2026-06-29T18:01:24.000Z",
       paragraphs: ["Hello"],
-      images: []
+      images: [],
+      videos: []
     )
     extracted = Threads::ExtractedThread.new(
       source_url: thread_export.source_url,

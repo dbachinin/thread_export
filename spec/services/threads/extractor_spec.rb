@@ -16,6 +16,7 @@ RSpec.describe Threads::Extractor do
             </div>
             <img width="36" height="36" alt="Profile photo alice" src="https://cdn.example/avatar.jpg">
             <img width="640" height="480" alt="Chart" src="https://cdn.example/chart.jpg">
+            <video src="https://cdn.example/demo.mp4" poster="https://cdn.example/poster.jpg"></video>
           </div>
           <div data-pressable-container="true">
             <a href="/@alice"><span translate="no" dir="auto">alice</span></a>
@@ -35,6 +36,8 @@ RSpec.describe Threads::Extractor do
     expect(extracted.posts.first.url).to eq("https://www.threads.com/@alice/post/one")
     expect(extracted.posts.first.paragraphs).to eq(["First paragraph", "Second paragraph"])
     expect(extracted.posts.first.images.map(&:url)).to eq(["https://cdn.example/chart.jpg"])
+    expect(extracted.posts.first.videos.map(&:url)).to eq(["https://cdn.example/demo.mp4"])
+    expect(extracted.posts.first.videos.first.poster_url).to eq("https://cdn.example/poster.jpg")
     expect(extracted.posts.second.paragraphs).to eq(["Third paragraph"])
   end
 
@@ -80,7 +83,16 @@ RSpec.describe Threads::Extractor do
                 "result" => {
                   "data" => {
                     "thread_items" => [
-                      { "post" => json_post("root", "alice", "Root text\n\nSecond paragraph", 1_782_756_090, ["https://cdn.example/root.jpg"]) },
+                      {
+                        "post" => json_post(
+                          "root",
+                          "alice",
+                          "Root text\n\nSecond paragraph",
+                          1_782_756_090,
+                          ["https://cdn.example/root.jpg"],
+                          ["https://cdn.example/root.mp4"]
+                        )
+                      },
                       { "post" => json_post("second", "alice", "Continuation", 1_782_756_091) },
                       { "post" => json_post("reply", "bob", "A reply", 1_782_756_092) }
                     ]
@@ -108,16 +120,18 @@ RSpec.describe Threads::Extractor do
     ])
     expect(extracted.posts.first.paragraphs).to eq(["Root text", "Second paragraph"])
     expect(extracted.posts.first.images.map(&:url)).to eq(["https://cdn.example/root.jpg"])
+    expect(extracted.posts.first.videos.map(&:url)).to eq(["https://cdn.example/root.mp4"])
   end
 
-  def json_post(code, username, text, taken_at, image_urls = [])
+  def json_post(code, username, text, taken_at, image_urls = [], video_urls = [])
     {
       "code" => code,
       "pk" => code,
       "taken_at" => taken_at,
       "user" => { "username" => username },
       "caption" => { "text" => text },
-      "image_versions2" => { "candidates" => image_urls.map { |url| { "url" => url } } }
+      "image_versions2" => { "candidates" => image_urls.map { |url| { "url" => url } } },
+      "video_versions" => video_urls.map { |url| { "url" => url } }
     }
   end
 end

@@ -1,6 +1,6 @@
 module Threads
   class Renderer
-    EXPORT_ROOT = Rails.root.join("public", "exports")
+    EXPORT_ROOT = Rails.root.join("public/exports")
 
     def initialize(thread_export, extracted_thread, fetcher: Fetcher.new)
       @thread_export = thread_export
@@ -21,37 +21,74 @@ module Threads
     private
 
     def render_html
-      downloaded = download_images
-      ERB.new(template).result_with_hash(thread: @thread, downloaded: downloaded, generated_at: Time.current)
+      downloaded = download_media
+      ERB.new(template)
+        .result_with_hash(
+          thread: @thread,
+          downloaded: downloaded,
+          generated_at: Time.current
+        )
     end
 
-    def download_images
+    def download_media
       @thread.posts.each_with_object({}) do |post, index|
-        index[post.object_id] = post.images.each_with_index.filter_map do |image, image_index|
-          download_image(image, image_index)
-        end
+        index[post.object_id] = {
+          images: download_images(post),
+          videos: download_videos(post)
+        }
+      end
+    end
+
+    def download_images(post)
+      post.images.each_with_index.filter_map do |image, image_index|
+        download_asset(image.url, "image", image_index, image.alt.presence || "Thread image")
+      end
+    end
+
+    def download_videos(post)
+      post.videos.each_with_index.filter_map do |video, video_index|
+        video_asset = download_asset(video.url, "video", video_index, 
+          video.alt.presence || "Thread video")
+        next unless video_asset
+
+        poster_asset = download_poster(video.poster_url, video_index)
+        video_asset.merge(poster: poster_asset&.fetch(:path, nil))
       end
     end
 
     def download_image(image, image_index)
-      response = @fetcher.download(image.url)
-      extension = extension_for(response, image.url)
-      filename = "image-#{Digest::SHA256.hexdigest(image.url)[0, 16]}-#{image_index}#{extension}"
+      download_asset(image.url, "image", image_index, image.alt.presence || "Thread image")
+    end
+
+    def download_poster(url, index)
+      return if url.blank?
+
+      download_asset(url, "poster", index, "Video poster")
+    end
+
+    def download_asset(url, prefix, index, alt)
+      response = @fetcher.download(url)
+      extension = extension_for(response, url)
+      filename = "#{prefix}-#{Digest::SHA256.hexdigest(url)[0, 16]}-#{index}#{extension}"
       target = @assets_dir.join(filename)
       File.binwrite(target, response.body)
 
-      { path: "assets/#{filename}", alt: image.alt.presence || "Thread image" }
+      { path: "assets/#{filename}", alt: alt }
     rescue StandardError
-      { path: image.url, alt: image.alt.presence || "Thread image" }
+      { path: url, alt: alt }
     end
 
     def extension_for(response, url)
       content_type = response.response["content-type"].to_s
+      return ".mp4" if content_type.include?("mp4") || content_type.include?("video/")
       return ".png" if content_type.include?("png")
       return ".webp" if content_type.include?("webp")
       return ".gif" if content_type.include?("gif")
 
-      File.extname(URI.parse(url).path).presence || ".jpg"
+      extension = File.extname(URI.parse(url).path)
+      return extension if extension.present?
+
+      content_type.include?("video") ? ".mp4" : ".jpg"
     end
 
     def template
@@ -71,8 +108,8 @@ module Threads
             article { margin: 0 0 34px; padding-bottom: 28px; border-bottom: 1px solid #e7e7e7; }
             article:last-child { border-bottom: 0; }
             p { margin: 0 0 16px; }
-            .images { display: grid; gap: 12px; margin-top: 18px; }
-            img { display: block; max-width: 100%; height: auto; border-radius: 8px; }
+            .media { display: grid; gap: 12px; margin-top: 18px; }
+            img, video { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 8px; background: #111; }
             a { color: #0b5cad; }
           </style>
         </head>
@@ -93,10 +130,15 @@ module Threads
                   <p><%= ERB::Util.html_escape(paragraph) %></p>
                 <% end %>
 
-                <% if downloaded[post.object_id].present? %>
-                  <div class="images">
-                    <% downloaded[post.object_id].each do |image| %>
+                <% if downloaded[post.object_id][:images].present? || downloaded[post.object_id][:videos].present? %>
+                  <div class="media">
+                    <% downloaded[post.object_id][:images].each do |image| %>
                       <img src="<%= ERB::Util.html_escape(image[:path]) %>" alt="<%= ERB::Util.html_escape(image[:alt]) %>">
+                    <% end %>
+                    <% downloaded[post.object_id][:videos].each do |video| %>
+                      <video controls playsinline preload="metadata"<% if video[:poster].present? %> poster="<%= ERB::Util.html_escape(video[:poster]) %>"<% end %>>
+                        <source src="<%= ERB::Util.html_escape(video[:path]) %>" type="video/mp4">
+                      </video>
                     <% end %>
                   </div>
                 <% end %>

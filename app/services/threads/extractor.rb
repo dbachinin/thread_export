@@ -21,10 +21,14 @@ module Threads
 
       if posts.empty?
         Rails.logger.warn("[threads.extract] failed diagnostics=#{failure_diagnostics.inspect}")
-        raise "Не найден блок #{THREAD_PAGELET} или JSON payload Threads"
+        raise "Can't found block #{THREAD_PAGELET} or JSON payload Threads"
       end
 
-      Threads::ExtractedThread.new(source_url: @source_uri.to_s, author: posts.first.author, posts: posts)
+      Threads::ExtractedThread.new(
+        source_url: @source_uri.to_s,
+        author: posts.first.author,
+        posts: posts
+      )
     end
 
     private
@@ -47,7 +51,11 @@ module Threads
     end
 
     def extract_from_pagelets
-      Rails.logger.info("[threads.extract.pagelets] selected=#{pagelet_nodes.map { |node| node['data-pagelet'] }.inspect}")
+      Rails.logger.info(
+        "[threads.extract.pagelets] selected=#{pagelet_nodes.map do |node|
+          node['data-pagelet']
+        end.inspect}"
+      )
 
       pagelet_nodes.flat_map do |pagelet|
         nodes = post_nodes(pagelet)
@@ -77,10 +85,18 @@ module Threads
       published_at = node.at_css("time")&.[]("datetime")
       paragraphs = extract_paragraphs(node)
       images = extract_images(node)
+      videos = extract_videos(node)
 
-      return if paragraphs.empty? && images.empty?
+      return if paragraphs.empty? && images.empty? && videos.empty?
 
-      Threads::Post.new(url: post_url, author: author, published_at: published_at, paragraphs: paragraphs, images: images)
+      Threads::Post.new(
+        url: post_url,
+        author: author,
+        published_at: published_at,
+        paragraphs: paragraphs,
+        images: images,
+        videos: videos
+      )
     end
 
     def extract_paragraphs(node)
@@ -95,7 +111,11 @@ module Threads
         text
       end
 
-      paragraphs = text_container.css('span[dir="auto"]').map { |span| span.text.squish } if paragraphs.empty?
+      if paragraphs.empty?
+        paragraphs = text_container.css('span[dir="auto"]').map do |span|
+          span.text.squish
+        end
+      end
       paragraphs.reject { |text| chrome_text?(text) }.uniq
     end
 
@@ -111,6 +131,20 @@ module Threads
       end.uniq
     end
 
+    def extract_videos(node)
+      node.css("video[src], video source[src]").filter_map do |video|
+        url = video["src"]
+        next if url.blank?
+
+        video_node = video.name == "video" ? video : video.ancestors("video").first
+        Threads::Video.new(
+          url: url,
+          poster_url: video_node&.[]("poster"),
+          alt: "Thread video"
+        )
+      end.uniq
+    end
+
     def small_image?(image)
       width = image["width"].to_i
       height = image["height"].to_i
@@ -118,7 +152,8 @@ module Threads
     end
 
     def chrome_text?(text)
-      text.in?(["Автор", "Поставить \"Нравится\"", "Комментировать", "Сделать репост", "Поделиться", "Ещё"]) ||
+      text.in?(["Автор", "Поставить \"Нравится\"", "Комментировать", "Сделать репост",
+"Поделиться", "Ещё"]) ||
         text.match?(/\A\d+[\s\u00a0]*(ч\.|мин\.|дн\.|нед\.)\z/)
     end
 
@@ -132,7 +167,9 @@ module Threads
       json_posts = json_post_hashes
       Rails.logger.info(
         "[threads.extract.json] raw_posts=#{json_posts.size} source_shortcode=#{source_shortcode.inspect} " \
-        "source_username=#{source_username.inspect} first_codes=#{json_posts.first(8).map { |post| post['code'] }.inspect}"
+        "source_username=#{source_username.inspect} first_codes=#{json_posts.first(8).map do |post|
+          post['code']
+        end.inspect}"
       )
       return [] if json_posts.empty?
 
@@ -175,14 +212,16 @@ module Threads
       code = post["code"]
       paragraphs = json_paragraphs(post)
       images = json_images(post)
-      return if paragraphs.empty? && images.empty?
+      videos = json_videos(post)
+      return if paragraphs.empty? && images.empty? && videos.empty?
 
       Threads::Post.new(
         url: code.present? && username.present? ? absolute_url("/@#{username}/post/#{code}") : nil,
         author: username,
         published_at: json_published_at(post),
         paragraphs: paragraphs,
-        images: images
+        images: images,
+        videos: videos
       )
     end
 
@@ -206,6 +245,25 @@ module Threads
 
         Threads::Image.new(url: url, alt: item["accessibility_caption"].to_s.squish)
       end.uniq
+    end
+
+    def json_videos(post)
+      media = post["carousel_media"].presence || [post]
+      media.filter_map do |item|
+        url = video_url_from_json(item)
+        next if url.blank?
+
+        Threads::Video.new(
+          url: url,
+          poster_url: item.dig("image_versions2", "candidates").to_a.first&.dig("url"),
+          alt: item["accessibility_caption"].to_s.squish.presence || "Thread video"
+        )
+      end.uniq
+    end
+
+    def video_url_from_json(item)
+      item.dig("video_versions", 0, "url").presence ||
+        item["video_url"].presence
     end
 
     def json_published_at(post)
